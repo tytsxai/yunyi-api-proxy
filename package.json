@@ -14,6 +14,7 @@
     "claude": "node proxy/claude-proxy.js",
     "all": "node proxy/index-fast.js & node proxy/claude-proxy.js",
     "install:proxy": "cd proxy && npm install",
+    "test": "node --test proxy/test/*.test.js",
     "smoke": "bash scripts/smoke.sh",
     "smoke:openai": "bash scripts/smoke.sh",
     "smoke:claude": "bash scripts/smoke-claude-proxy.sh",
