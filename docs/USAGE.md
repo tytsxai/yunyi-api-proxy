@@ -10,7 +10,7 @@
 ## 1) 一键启动（推荐）
 
 ```bash
-cd yunyi-api-guide
+cd yunyi-api-proxy
 cp .env.example .env.local
 # 编辑 .env.local 填入 YUNYI_API_KEY
 

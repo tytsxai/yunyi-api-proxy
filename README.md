@@ -77,7 +77,7 @@ npm run smoke:all
 ## 📁 项目结构
 
 ```
-yunyi-api-guide/
+yunyi-api-proxy/
 ├── README.md              # 本文档
 ├── ARCHITECTURE.md        # 架构文档
 ├── .env.example           # 环境变量模板

@@ -6,7 +6,7 @@
 
 1. 启动本地代理：
 ```bash
-cd yunyi-api-guide
+cd yunyi-api-proxy
 npm run fast
 ```
 

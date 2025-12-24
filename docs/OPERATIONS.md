@@ -45,8 +45,8 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/path/to/yunyi-api-guide
-EnvironmentFile=/path/to/yunyi-api-guide/.env
+WorkingDirectory=/path/to/yunyi-api-proxy
+EnvironmentFile=/path/to/yunyi-api-proxy/.env
 ExecStart=/usr/bin/node proxy/index-fast.js
 Restart=always
 RestartSec=2

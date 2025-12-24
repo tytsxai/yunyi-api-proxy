@@ -1,5 +1,5 @@
 {
-  "name": "yunyi-api-guide",
+  "name": "yunyi-api-proxy",
   "version": "1.0.0",
   "description": "云驿 API 使用指南与二次中转代理",
   "engines": {
