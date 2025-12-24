@@ -18,6 +18,7 @@
     "smoke": "bash scripts/smoke.sh",
     "smoke:openai": "bash scripts/smoke.sh",
     "smoke:claude": "bash scripts/smoke-claude-proxy.sh",
+    "smoke:claude:messages": "SMOKE_CLAUDE_MESSAGES=1 bash scripts/smoke-claude-proxy.sh",
     "smoke:all": "bash scripts/smoke.sh && bash scripts/smoke-claude-proxy.sh"
   }
 }

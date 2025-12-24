@@ -41,6 +41,10 @@ npm run smoke:claude
 npm run smoke:all
 ```
 
+说明：
+- `smoke:claude` 默认仅检查 `/health` 与 `/ready`（避免在未配置上游 Key 时触发真实转发）。
+- 如需连通性/协议转换的端到端自检，可执行：`SMOKE_CLAUDE_MESSAGES=1 npm run smoke:claude`（需要已配置可用的上游与密钥）。
+
 ---
 
 ## 3) OpenAI 兼容代理（Cursor / VS Code / SDK）

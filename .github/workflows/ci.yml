@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Smoke (offline)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Provide minimal config so /ready passes without real secrets.
+          cat > .env <<'EOF'
+          YUNYI_API_KEY=dummy
+          CLAUDE_PROXY_MODE=codex
+          EOF
+
+          tmpdir="$(mktemp -d)"
+          node proxy/index-fast.js >"$tmpdir/openai.log" 2>&1 & openai_pid=$!
+          node proxy/claude-proxy.js >"$tmpdir/claude.log" 2>&1 & claude_pid=$!
+          cleanup() { kill $openai_pid $claude_pid 2>/dev/null || true; rm -rf "$tmpdir" .env || true; }
+          trap cleanup EXIT
+
+          for i in {1..80}; do
+            if curl -fsS http://127.0.0.1:3456/health >/dev/null 2>&1 && curl -fsS http://127.0.0.1:3457/health >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.1
+            if ! kill -0 $openai_pid 2>/dev/null; then echo "openai proxy exited"; tail -n 200 "$tmpdir/openai.log"; exit 1; fi
+            if ! kill -0 $claude_pid 2>/dev/null; then echo "claude proxy exited"; tail -n 200 "$tmpdir/claude.log"; exit 1; fi
+            if [ "$i" -eq 80 ]; then
+              echo "timeout waiting for proxies"
+              tail -n 200 "$tmpdir/openai.log" || true
+              tail -n 200 "$tmpdir/claude.log" || true
+              exit 1
+            fi
+          done
+
+          bash scripts/smoke.sh
+          bash scripts/smoke-claude-proxy.sh
