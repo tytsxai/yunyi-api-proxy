@@ -1,0 +1,22 @@
+{
+    "说明": "Cursor 配置指南 - 使用云驿二次中转代理",
+    "步骤": [
+        "1. 启动本地代理: npm run fast",
+        "2. 打开 Cursor 设置 (Cmd+,)",
+        "3. 搜索 'OpenAI' 或 'Models'",
+        "4. 按下方配置填写"
+    ],
+    "Cursor 设置": {
+        "OpenAI API Key": "任意值 (如 sk-xxx)",
+        "OpenAI Base URL": "http://localhost:3456/v1"
+    },
+    "远程访问配置": {
+        "说明": "如果代理运行在其他机器上，使用该机器的 IP",
+        "OpenAI Base URL": "http://192.168.x.x:3456/v1"
+    },
+    "注意事项": [
+        "代理会自动将任何模型名映射到 gpt-5-codex",
+        "API Key 可以填任意值，代理使用 .env 中的云驿激活码",
+        "确保代理正在运行 (npm run fast)"
+    ]
+}

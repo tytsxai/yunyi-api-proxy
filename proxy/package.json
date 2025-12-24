@@ -1,0 +1,16 @@
+{
+    "name": "yunyi-proxy",
+    "version": "2.0.0",
+    "description": "云驿 API 二次中转代理 - 将 Responses API 转换为 Chat Completions API",
+    "main": "index-fast.js",
+    "type": "module",
+    "engines": {
+        "node": ">=18"
+    },
+    "scripts": {
+        "start": "node index-fast.js",
+        "fast": "node index-fast.js",
+        "bun": "bun index-fast.js"
+    },
+    "dependencies": {}
+}

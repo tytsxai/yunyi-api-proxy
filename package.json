@@ -1,0 +1,22 @@
+{
+  "name": "yunyi-api-guide",
+  "version": "1.0.0",
+  "description": "云驿 API 使用指南与二次中转代理",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "setup": "./setup.sh",
+    "bootstrap": "./proxy-ctl.sh bootstrap",
+    "ctl": "./proxy-ctl.sh",
+    "start": "node proxy/index-fast.js",
+    "fast": "node proxy/index-fast.js",
+    "claude": "node proxy/claude-proxy.js",
+    "all": "node proxy/index-fast.js & node proxy/claude-proxy.js",
+    "install:proxy": "cd proxy && npm install",
+    "smoke": "bash scripts/smoke.sh",
+    "smoke:openai": "bash scripts/smoke.sh",
+    "smoke:claude": "bash scripts/smoke-claude-proxy.sh",
+    "smoke:all": "bash scripts/smoke.sh && bash scripts/smoke-claude-proxy.sh"
+  }
+}

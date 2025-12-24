@@ -1,0 +1,14 @@
+{
+    "name": "yunyi-api-nodejs",
+    "version": "1.0.0",
+    "description": "Yunyi API Node.js 示例",
+    "type": "module",
+    "scripts": {
+        "chat": "node chat.js",
+        "stream": "node stream.js"
+    },
+    "dependencies": {
+        "openai": "^4.0.0",
+        "dotenv": "^16.0.0"
+    }
+}

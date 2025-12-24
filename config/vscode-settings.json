@@ -1,0 +1,27 @@
+{
+    "说明": "VS Code 配置指南 - 使用云驿二次中转代理",
+    "步骤": [
+        "1. 启动本地代理: npm run fast",
+        "2. 安装 Continue 或其他 AI 扩展",
+        "3. 在扩展设置中配置 OpenAI 兼容端点"
+    ],
+    "Continue 扩展配置": {
+        "说明": "编辑 ~/.continue/config.json",
+        "models": [
+            {
+                "title": "云驿 Codex",
+                "provider": "openai",
+                "model": "gpt-4",
+                "apiBase": "http://localhost:3456/v1",
+                "apiKey": "any-key"
+            }
+        ]
+    },
+    "GitHub Copilot Chat 自定义端点": {
+        "说明": "目前 Copilot 不支持自定义端点，建议使用 Continue"
+    },
+    "远程访问配置": {
+        "说明": "如果代理运行在其他机器上",
+        "apiBase": "http://192.168.x.x:3456/v1"
+    }
+}
