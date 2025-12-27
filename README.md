@@ -42,6 +42,10 @@ npm run claude
 export ANTHROPIC_BASE_URL=http://localhost:3457
 ```
 
+若启用 `PROXY_API_KEY` / `CLAUDE_PROXY_API_KEY`，请在 Claude CLI 侧设置
+`ANTHROPIC_AUTH_TOKEN=<同值>`（代理会校验 `Authorization` 或 `x-api-key`）。
+如需与 OpenAI 代理分离密钥，可设置 `CLAUDE_PROXY_API_KEY` 覆盖。
+
 **Claude CLI 代理模式（在 `.env.local` / `.env` 配置）**
 
 - `CLAUDE_PROXY_MODE=codex`：Claude CLI → 云驿 Codex（使用 `CODEX_MODEL` + `CODEX_REASONING`）
@@ -294,6 +298,7 @@ AUTO_KILL_PORT=false
 说明：
 - `PROXY_HOST` 默认仅绑定本机，避免局域网滥用。
 - `PROXY_API_KEY` 启用后，请在客户端请求头中加入 `Authorization: Bearer <PROXY_API_KEY>`。
+- 浏览器/前端请求（带 `Origin`）会强制要求 `PROXY_API_KEY`，否则返回 `configuration_error`。
 - `AUTO_KILL_PORT` 默认关闭，避免误杀占用端口的其他进程。
 - `CORS_ORIGINS` 默认为 `*`，生产环境建议指定来源白名单。
 - `FORCE_SHUTDOWN_MS` 用于优雅关闭时的强制退出兜底。

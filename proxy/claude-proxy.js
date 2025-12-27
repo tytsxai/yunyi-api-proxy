@@ -91,6 +91,21 @@ const CLAUDE_PROXY_DEBUG = ["1", "true", "yes", "on"].includes(
     config.CLAUDE_PROXY_DEBUG || process.env.CLAUDE_PROXY_DEBUG || "",
   ).toLowerCase(),
 );
+const PROXY_API_KEY =
+  config.CLAUDE_PROXY_API_KEY ||
+  process.env.CLAUDE_PROXY_API_KEY ||
+  config.PROXY_API_KEY ||
+  process.env.PROXY_API_KEY;
+const CORS_ORIGINS = String(
+  config.CLAUDE_CORS_ORIGINS ??
+    config.CORS_ORIGINS ??
+    process.env.CLAUDE_CORS_ORIGINS ??
+    process.env.CORS_ORIGINS ??
+    "*",
+)
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 // 0 / empty = unlimited (do not limit concurrency)
 // Claude Code/codeagent-wrapper 可能会产生大量并发子请求。
 // 这里提供“可选并发上限”，用于在上游出现 429 时做运维侧的闸门止血：
@@ -141,6 +156,20 @@ try {
 
 const generateRequestId = () =>
   `req_${randomUUID?.() || Math.random().toString(36).slice(2)}`;
+
+function headerValue(value) {
+  if (Array.isArray(value)) return value[0] || "";
+  return typeof value === "string" ? value : "";
+}
+
+function getProxyAuthToken(req) {
+  const auth = headerValue(req.headers["authorization"]).trim();
+  if (auth) {
+    const match = auth.match(/^Bearer\s+(.+)$/i);
+    if (match && match[1]) return match[1].trim();
+  }
+  return headerValue(req.headers["x-api-key"]).trim();
+}
 
 function createSemaphore(max) {
   let inFlight = 0;
@@ -860,6 +889,17 @@ async function handleMessages(req, res) {
   res.setHeader("X-Request-Id", requestId);
 
   try {
+    if (PROXY_API_KEY && !req.isAuthed) {
+      const token = getProxyAuthToken(req);
+      if (token !== PROXY_API_KEY) {
+        return jsonResponse(res, 401, {
+          type: "error",
+          error: { type: "authentication_error", message: "Unauthorized" },
+        });
+      }
+      req.isAuthed = true;
+    }
+
     const body = await readBody(req);
     let request;
     try {
@@ -1283,17 +1323,64 @@ const server = createServer(async (req, res) => {
     pathname = new URL(req.url || "/", "http://localhost").pathname;
   } catch {}
 
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
+  const allowOrigin =
+    origin && (CORS_ORIGINS.includes("*") || CORS_ORIGINS.includes(origin))
+      ? CORS_ORIGINS.includes("*")
+        ? "*"
+        : origin
+      : "";
+  const isCorsRequest = Boolean(origin);
+
+  // Browser requests (has Origin) must be explicitly allowed and authenticated.
+  if (isCorsRequest) {
+    if (!allowOrigin) {
+      res.writeHead(403, { "Cache-Control": "no-store" });
+      return res.end("CORS origin not allowed");
+    }
+    if (!PROXY_API_KEY) {
+      res.setHeader("Access-Control-Allow-Origin", allowOrigin);
+      if (allowOrigin !== "*") res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, x-api-key, anthropic-version",
+      );
+      return jsonResponse(res, 403, {
+        type: "error",
+        error: {
+          type: "configuration_error",
+          message: "Browser access requires PROXY_API_KEY to be configured",
+        },
+      });
+    }
+  }
+
   // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, x-api-key, anthropic-version",
-  );
+  if (allowOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", allowOrigin);
+    if (allowOrigin !== "*") res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, x-api-key, anthropic-version",
+    );
+  }
 
   if (method === "OPTIONS") {
     res.writeHead(204);
     return res.end();
+  }
+
+  if (PROXY_API_KEY) {
+    const token = getProxyAuthToken(req);
+    if (token !== PROXY_API_KEY) {
+      return jsonResponse(res, 401, {
+        type: "error",
+        error: { type: "authentication_error", message: "Unauthorized" },
+      });
+    }
+    req.isAuthed = true;
   }
 
   // 路由

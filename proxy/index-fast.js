@@ -9,7 +9,7 @@ import { createServer } from "http";
 import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { networkInterfaces } from "os";
 import { once } from "events";
 import { randomUUID } from "crypto";
@@ -68,25 +68,63 @@ const FORCE_SHUTDOWN_MS = parseInt(
   config.FORCE_SHUTDOWN_MS || process.env.FORCE_SHUTDOWN_MS || "10000",
   10,
 );
-const CORS_ORIGINS = (config.CORS_ORIGINS || process.env.CORS_ORIGINS || "*")
+const CORS_ORIGINS = String(
+  config.CORS_ORIGINS ?? process.env.CORS_ORIGINS ?? "*",
+)
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
 
 // 自动释放被占用的端口
-function killPortProcess(port) {
+function sleepSync(ms) {
   try {
-    const pid = execSync(`lsof -ti:${port} 2>/dev/null`).toString().trim();
-    if (pid) {
-      console.log(`⚠️  端口 ${port} 被进程 ${pid} 占用，正在自动释放...`);
-      execSync(`kill -9 ${pid}`);
-      // 等待端口完全释放
-      execSync("sleep 0.5");
-      console.log(`✅ 端口已释放\n`);
-    }
-  } catch (e) {
-    // 端口未被占用，正常情况
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    // ignore
   }
+}
+
+function listPortPids(port) {
+  try {
+    const out = execFileSync("lsof", [`-ti:${String(port)}`], {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+    if (!out) return [];
+    return out
+      .split(/\s+/)
+      .map((s) => parseInt(s, 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+  } catch {
+    return [];
+  }
+}
+
+function killPortProcess(port) {
+  const pids = listPortPids(port);
+  if (pids.length === 0) return;
+
+  console.log(`⚠️  端口 ${port} 被进程 ${pids.join(",")} 占用，正在自动释放...`);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {}
+  }
+
+  sleepSync(400);
+
+  const remaining = listPortPids(port);
+  if (remaining.length > 0) {
+    for (const pid of remaining) {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {}
+    }
+    sleepSync(200);
+  }
+
+  console.log(`✅ 端口已释放\n`);
 }
 
 // 启动前释放端口（默认关闭，避免误杀）
@@ -132,6 +170,20 @@ const CODEX_INSTRUCTIONS = loadCodexInstructions();
 const generateId = () => "chatcmpl-" + Math.random().toString(36).slice(2, 15);
 const generateRequestId = () =>
   `req_${typeof randomUUID === "function" ? randomUUID() : Math.random().toString(36).slice(2, 12)}`;
+
+function headerValue(value) {
+  if (Array.isArray(value)) return value[0] || "";
+  return typeof value === "string" ? value : "";
+}
+
+function getProxyAuthToken(req) {
+  const auth = headerValue(req.headers["authorization"]).trim();
+  if (auth) {
+    const match = auth.match(/^Bearer\s+(.+)$/i);
+    if (match && match[1]) return match[1].trim();
+  }
+  return headerValue(req.headers["x-api-key"]).trim();
+}
 
 // JSON 响应辅助函数
 const jsonResponse = (res, status, data) => {
@@ -276,14 +328,14 @@ async function handleChatCompletions(req, res) {
     const isStream = chatRequest.stream ?? false;
 
     // 可选代理鉴权
-    if (PROXY_API_KEY) {
-      const auth = req.headers["authorization"] || "";
-      const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (PROXY_API_KEY && !req.isAuthed) {
+      const token = getProxyAuthToken(req);
       if (token !== PROXY_API_KEY) {
         return jsonResponse(res, 401, {
           error: { message: "Unauthorized", type: "authentication_error" },
         });
       }
+      req.isAuthed = true;
     }
 
     // 转换格式 - 处理各种消息格式
@@ -587,6 +639,39 @@ const server = createServer(async (req, res) => {
     // keep default
   }
 
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
+  const allowOrigin =
+    origin && (CORS_ORIGINS.includes("*") || CORS_ORIGINS.includes(origin))
+      ? CORS_ORIGINS.includes("*")
+        ? "*"
+        : origin
+      : "";
+
+  // Browser requests (has Origin) must be explicitly allowed and authenticated.
+  const isCorsRequest = Boolean(origin);
+  if (isCorsRequest) {
+    if (!allowOrigin) {
+      res.writeHead(403, { "Cache-Control": "no-store" });
+      return res.end("CORS origin not allowed");
+    }
+    if (!PROXY_API_KEY) {
+      res.setHeader("Access-Control-Allow-Origin", allowOrigin);
+      if (allowOrigin !== "*") res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, X-Request-Id, x-api-key",
+      );
+      res.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
+      return jsonResponse(res, 403, {
+        error: {
+          message: "Browser access requires PROXY_API_KEY to be configured",
+          type: "configuration_error",
+        },
+      });
+    }
+  }
+
   const requestId = req.headers["x-request-id"] || generateRequestId();
   req.requestId = requestId;
   res.setHeader("X-Request-Id", requestId);
@@ -606,29 +691,34 @@ const server = createServer(async (req, res) => {
     if (!res.writableEnded) logAccess();
   });
 
-  // CORS 支持
-  const origin = req.headers.origin;
-  const allowOrigin = CORS_ORIGINS.includes("*")
-    ? "*"
-    : origin && CORS_ORIGINS.includes(origin)
-      ? origin
-      : "";
+  // CORS
   if (allowOrigin) {
     res.setHeader("Access-Control-Allow-Origin", allowOrigin);
     if (allowOrigin !== "*") res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Request-Id, x-api-key",
+    );
+    res.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
   }
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Request-Id",
-  );
-  res.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
   res.setHeader("X-Content-Type-Options", "nosniff");
 
   // 处理 OPTIONS 预检请求
   if (method === "OPTIONS") {
     res.writeHead(204);
     return res.end();
+  }
+
+  // Optional auth gate (recommended when exposed beyond localhost)
+  if (PROXY_API_KEY) {
+    const token = getProxyAuthToken(req);
+    if (token !== PROXY_API_KEY) {
+      return jsonResponse(res, 401, {
+        error: { message: "Unauthorized", type: "authentication_error" },
+      });
+    }
+    req.isAuthed = true;
   }
 
   // 路由

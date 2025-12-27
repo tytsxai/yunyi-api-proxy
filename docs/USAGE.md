@@ -60,6 +60,7 @@ npm run fast
 - Base URL：`http://localhost:3456/v1`
 - API Key：默认填任意值即可（代理以 `.env.local` 的 `YUNYI_API_KEY` 为准）
 - 若启用了 `PROXY_API_KEY`：客户端 API Key 必须填写 `PROXY_API_KEY`
+- 浏览器/前端访问（带 `Origin`）必须启用 `PROXY_API_KEY`，否则会被拒绝
 
 Cursor 详细配置：`docs/CURSOR_SETUP.md`
 
@@ -73,6 +74,10 @@ Cursor 详细配置：`docs/CURSOR_SETUP.md`
 npm run claude
 export ANTHROPIC_BASE_URL=http://localhost:3457
 ```
+
+若启用了 `PROXY_API_KEY` / `CLAUDE_PROXY_API_KEY`，请在 Claude CLI 侧设置
+`ANTHROPIC_AUTH_TOKEN=<同值>`（代理会校验 `Authorization` 或 `x-api-key`）。
+如需与 OpenAI 代理分离密钥，可设置 `CLAUDE_PROXY_API_KEY` 覆盖。
 
 常见用法：
 
